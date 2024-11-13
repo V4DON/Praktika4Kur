@@ -1,0 +1,46 @@
+create table material (
+material_id serial primary key,
+names varchar(50),
+defect float
+)
+
+create table producttype (
+type_id serial primary key,
+type_name varchar(50),
+coefficient float
+)
+
+create table product (
+product_id serial primary key,
+prodtype int references producttype(type_id),
+description varchar(100),
+article int,
+price float
+)
+
+create table materialproduct (
+mp_id serial primary key,
+iproduct int references product(product_id),
+imaterial int references material(material_id)
+)
+
+
+create table partners (
+partners_id serial primary key,
+type_partner varchar(50),
+company_name varchar(100),
+u_address varchar(150),
+inn varchar(50),
+director_name varchar(100),
+phone varchar(17),
+email varchar(75),
+rating int
+)
+
+create table partnerproduct (
+pp_id serial primary key,
+id_product int references product(product_id),
+id_partner int references partners(partners_id),
+quantity int,
+date_of_sale date
+)
