@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, QPushButton, QLineEdit, QDialog, QScrollArea, QTableWidget, QTableWidgetItem
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, QPushButton, QLineEdit, QDialog, QScrollArea, QTableWidget, QTableWidgetItem, QDialogButtonBox
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QPixmap, QIcon
@@ -27,14 +27,22 @@ class Partner(Base):
     rating = Column(Integer)
     partnerproducts = relationship("PartnerProduct", back_populates="partner_relation")
     
+class Products(Base):
+    __tablename__ = 'product'
+    product_id = Column(Integer, primary_key=True, autoincrement=True)
+    description = Column(String)
+    partnerproduct = relationship("PartnerProduct", back_populates="product_relation")
+    
+
 
 class PartnerProduct(Base):
     __tablename__ = 'partnerproduct'
     pp_id = Column(Integer, primary_key=True)
     id_partner = Column(Integer, ForeignKey('partners.partners_id'))
-    id_product = Column(Integer)
-    count_product = Column(Integer)
+    id_product = Column(Integer, ForeignKey('product.product_id'))
+    quantity = Column(Integer)
     partner_relation = relationship("Partner", back_populates="partnerproducts")
+    product_relation = relationship("Products", back_populates="partnerproduct")
 
 
 class PartnerApp(QMainWindow):
@@ -42,11 +50,12 @@ class PartnerApp(QMainWindow):
         super().__init__()
         self.setWindowTitle("МастерПол")
         self.resize(800, 600)
+
         
         self.setWindowIcon(QIcon('icons.ico')) 
 
         # Создание подключения к базе данных через SQLAlchemy для PostgreSQL
-        self.engine = create_engine('postgresql://postgres:1234@localhost:5432/postgres')  
+        self.engine = create_engine('postgresql://postgres@localhost:5432/postgres')  
         Session = sessionmaker(bind=self.engine)
         self.session = Session()
 
@@ -111,6 +120,7 @@ class PartnerApp(QMainWindow):
 
         # Загрузка данных
         self.load_partners()
+        
 
     def show_history(self):
         history_dialog = QDialog(self)
@@ -118,24 +128,26 @@ class PartnerApp(QMainWindow):
         history_dialog.resize(600, 400)
 
         layout = QVBoxLayout()
-
+        
+        logo_label = QLabel()
+        logo_pixmap = QPixmap('logotype.png')
+        logo_pixmap = logo_pixmap.scaled(50, 50, Qt.AspectRatioMode.KeepAspectRatio)
+        logo_label.setPixmap(logo_pixmap)
+        layout.addWidget(logo_label)
+        
         self.history_table = QTableWidget()
         self.history_table.setColumnCount(3)
         self.history_table.setHorizontalHeaderLabels(["ID Продукта", "ID Партнера", "Количество"])
 
         try:
-            partner_products = self.session.query(
-                PartnerProduct.id_product,
-                PartnerProduct.id_partner,
-                PartnerProduct.count_product
-            ).all()
+            partner_products = self.session.query(PartnerProduct).all()
 
             self.history_table.setRowCount(len(partner_products))
 
             for row, partner_product in enumerate(partner_products):
-                self.history_table.setItem(row, 0, QTableWidgetItem(str(partner_product.id_product)))
-                self.history_table.setItem(row, 1, QTableWidgetItem(str(partner_product.id_partner)))
-                self.history_table.setItem(row, 2, QTableWidgetItem(str(partner_product.count_product)))
+                self.history_table.setItem(row, 0, QTableWidgetItem(str(partner_product.product_relation.description)))
+                self.history_table.setItem(row, 1, QTableWidgetItem(str(partner_product.partner_relation.company_name)))
+                self.history_table.setItem(row, 2, QTableWidgetItem(str(partner_product.quantity)))
 
             layout.addWidget(self.history_table)
         except Exception as e:
@@ -148,9 +160,9 @@ class PartnerApp(QMainWindow):
         self.report_button.clicked.connect(self.generate_report)
         layout.addWidget(self.report_button)
 
-
         history_dialog.setLayout(layout)
         history_dialog.exec()
+
 
     def open_add_partner_dialog(self):
         dialog = PartnerDialog(self)
@@ -202,6 +214,7 @@ class PartnerApp(QMainWindow):
 
         # Используем SQLAlchemy для загрузки данных из таблицы Partners
         partners = self.session.query(Partner).all()
+        
         for partner in partners:
             partner_id = partner.partners_id
             partner_type = partner.type_partner
@@ -212,7 +225,7 @@ class PartnerApp(QMainWindow):
 
             # Здесь можно выполнить дополнительные запросы для расчета скидок и других данных
             sales_query = self.session.execute(
-                select(func.sum(PartnerProduct.count_product)).where(PartnerProduct.id_partner == partner_id)
+                select(func.sum(PartnerProduct.quantity)).where(PartnerProduct.id_partner == partner_id)
                 )           
             total_sales = sales_query.scalar() or 0
             discount = self.calculate_discount(total_sales)
@@ -244,14 +257,11 @@ class PartnerApp(QMainWindow):
             left_layout.addWidget(rating_label)
 
             right_layout = QVBoxLayout()
-            sales_label = QLabel(f"Продажи: {total_sales}")
-            sales_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
-            sales_label.setStyleSheet("color: black;border: 0px;")
+
             discount_label = QLabel(f"Скидка: {discount}")
             discount_label.setFont(QFont("Segoe UI", 10))
             discount_label.setStyleSheet("color: black;border: 0px;")
             
-            right_layout.addWidget(sales_label)
             right_layout.addWidget(discount_label)
 
             partner_card_layout.addLayout(left_layout)
@@ -288,7 +298,12 @@ class PartnerDialog(QDialog):
         self.director_input = QLineEdit(self)
         self.phone_input = QLineEdit(self)
         self.rating_input = QLineEdit(self)
-
+        
+        logo_label = QLabel()
+        logo_pixmap = QPixmap('logotype.png')
+        logo_pixmap = logo_pixmap.scaled(35, 35, Qt.AspectRatioMode.KeepAspectRatio)
+        logo_label.setPixmap(logo_pixmap)
+        layout.addWidget(logo_label)
         layout.addWidget(QLabel("Название компании"))
         layout.addWidget(self.name_input)
         layout.addWidget(QLabel("Тип партнера"))
